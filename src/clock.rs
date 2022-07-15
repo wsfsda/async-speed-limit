@@ -47,7 +47,7 @@ pub trait Clock: Clone + Default {
     type Instant: Copy + Sub<Output = Duration>;
 
     /// Future type returned by [`sleep()`](Clock::sleep()).
-    type Delay: Future<Output = ()> + Unpin;
+    type Delay: Future<Output = ()>;
 
     /// Returns the current time instant. It should be monotonically increasing,
     /// but not necessarily high-precision or steady.
