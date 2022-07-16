@@ -523,8 +523,8 @@ impl<R, C: Clock> Resource<R, C> {
         let mut this = self.project();
 
         if this.waiter.is_some() {
-            let mut waiter = this.waiter.as_mut().as_pin_mut().unwrap();
-            // let waiter = unsafe { Pin::new_unchecked(&mut waiter) };
+            let waiter = this.waiter.as_mut().as_pin_mut().unwrap();
+
             let res = waiter.poll(cx);
             if res.is_pending() {
                 return Poll::Pending;
@@ -540,23 +540,6 @@ impl<R, C: Clock> Resource<R, C> {
             }
         }
         res
-
-        // if let Some(waiter) = this.waiter.as_pin_mut() {
-        //     let res = waiter.poll(cx);
-        //     if res.is_pending() {
-        //         return Poll::Pending;
-        //     }
-        //     *this.waiter = None;
-        // }
-
-        // let res = poll(this.resource, cx);
-        // if let Poll::Ready(obj) = &res {
-        //     let len = length(obj);
-        //     if len > 0 {
-        //         *this.waiter = Some(this.limiter.consume(len));
-        //     }
-        // }
-        // res
     }
 }
 
