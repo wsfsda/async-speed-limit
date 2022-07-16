@@ -392,11 +392,13 @@ impl<C: BlockingClock> Limiter<C> {
     }
 }
 
+pin_project! {
 /// The future returned by [`Limiter::consume()`].
-#[derive(Debug)]
-pub struct Consume<C: Clock, R> {
+#[derive(Debug)]pub struct Consume<C: Clock, R> {
+    #[pin]
     future: Option<C::Delay>,
     result: Option<R>,
+}
 }
 
 #[allow(clippy::use_self)] // https://github.com/rust-lang/rust-clippy/issues/3410
@@ -414,9 +416,9 @@ impl<C: Clock, R: Unpin> Future for Consume<C, R> {
     type Output = R;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
-        let is_ready = match &mut this.future {
-            Some(future) => Pin::new(future).poll(cx).is_ready(),
+        let this = self.project();
+        let is_ready = match this.future.as_pin_mut() {
+            Some(future) => future.poll(cx).is_ready(),
             None => true,
         };
         if is_ready {
@@ -452,6 +454,7 @@ pin_project! {
         limiter: Limiter<C>,
         #[pin]
         resource: R,
+        #[pin]
         waiter: Option<Consume<C, ()>>,
     }
 }
@@ -518,21 +521,23 @@ impl<R, C: Clock> Resource<R, C> {
         length: impl FnOnce(&T, &B) -> usize,
         poll: impl FnOnce(Pin<&mut R>, &mut Context<'_>, &mut B) -> Poll<T>,
     ) -> Poll<T> {
-        let this = self.project();
+        let mut this = self.project();
 
-        if let Some(waiter) = this.waiter {
-            let res = Pin::new(waiter).poll(cx);
+        if this.waiter.is_some() {
+            let waiter = this.waiter.as_mut().as_pin_mut().unwrap();
+
+            let res = waiter.poll(cx);
             if res.is_pending() {
                 return Poll::Pending;
             }
-            *this.waiter = None;
+            this.waiter.as_mut().set(None);
         }
 
         let res = poll(this.resource, cx, &mut buf);
         if let Poll::Ready(obj) = &res {
             let len = length(obj, &buf);
             if len > 0 {
-                *this.waiter = Some(this.limiter.consume(len));
+                this.waiter.as_mut().set(Some(this.limiter.consume(len)));
             }
         }
         res
